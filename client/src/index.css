@@ -1,0 +1,86 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --color-paper-bg: #FBF9F5;
+    --color-paper-card: #FFFFFF;
+    --color-paper-border: #E5E1D8;
+    --color-ink-primary: #1A1B1E;
+    --color-ink-secondary: #4A4D53;
+    --color-ink-muted: #71757E;
+    --color-sage: #5F7363;
+    --color-terracotta: #BC4749;
+  }
+
+  .dark {
+    --color-paper-bg: #121315;
+    --color-paper-card: #181A1D;
+    --color-paper-border: #2A2D34;
+    --color-ink-primary: #ECEAE4;
+    --color-ink-secondary: #B5B3AC;
+    --color-ink-muted: #85878C;
+    --color-sage: #7E9482;
+    --color-terracotta: #D9534F;
+  }
+
+  body {
+    background-color: var(--color-paper-bg);
+    color: var(--color-ink-primary);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    line-height: 1.6;
+    letter-spacing: -0.011em;
+  }
+
+  h1, h2, h3, .font-editorial {
+    font-family: 'Newsreader', 'Georgia', 'Merriweather', serif;
+    letter-spacing: -0.02em;
+  }
+}
+
+/* Restrained, editorial selections */
+::selection {
+  background-color: #E2E8E3;
+  color: #1A1B1E;
+}
+
+.dark ::selection {
+  background-color: #2F3B32;
+  color: #ECEAE4;
+}
+
+/* Subtle editorial scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #D8D4CA;
+  border-radius: 3px;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: #33363D;
+  border-radius: 3px;
+}
+
+/* Clean text selection tooltip indicator */
+.selectable-prose {
+  cursor: text;
+}
+
+/* Restrained animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}

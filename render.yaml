@@ -1,0 +1,91 @@
+# ==============================================================================
+# PULSE — RENDER BLUEPRINT SPECIFICATION (render.yaml)
+# Production deployment configuration for Pulse:
+# - Persistent always-on Docker Web Service (Node.js 20 Backend + Background Jobs)
+# - High-performance Render Static Site (React 18 / Vite 6 Frontend SPA)
+# ==============================================================================
+
+services:
+  # ----------------------------------------------------------------------------
+  # 1. PULSE BACKEND WEB SERVICE
+  # ----------------------------------------------------------------------------
+  - type: web
+    name: pulse-backend
+    runtime: docker
+    dockerfilePath: ./server/Dockerfile
+    dockerContext: ./server
+    plan: free # 100% Free Web Service ($0/month)
+    region: oregon # Options: oregon, ohio, frankfurt, singapore
+    numInstances: 1 # Exactly 1 instance initially to prevent duplicate in-process scheduled jobs
+    healthCheckPath: /api/health
+    envVars:
+      - key: PORT
+        value: 3001
+      - key: NODE_ENV
+        value: production
+      - key: PULSE_STORAGE_MODE
+        value: cloud
+      - key: CLIENT_URL
+        sync: false # Set to frontend URL (e.g. https://pulse-frontend.onrender.com or custom domain)
+      - key: SUPABASE_URL
+        sync: false # e.g. https://<project-ref>.supabase.co
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false # Confidential! Grants server-side elevated privileges for background jobs
+      - key: ADMIN_API_KEY
+        sync: false # High-entropy 256-bit secret protecting /api/admin/* and /api/settings/ai-config
+      - key: AI_PRIMARY_PROVIDER
+        value: fallback # Defaulting to verified fallback engine; paid providers remain inactive
+      - key: AI_SECONDARY_PROVIDER
+        value: fallback
+      - key: OPENAI_API_KEY
+        sync: false # Optional: Set only when paid OpenAI provider is approved
+      - key: ANTHROPIC_API_KEY
+        sync: false # Optional: Set only when paid Claude provider is approved
+      - key: XAI_API_KEY
+        sync: false # Optional: Set only when paid Grok provider is approved
+      - key: VAPID_PUBLIC_KEY
+        sync: false # Web Push VAPID public key
+      - key: VAPID_PRIVATE_KEY
+        sync: false # Web Push VAPID private signing key
+      - key: VAPID_SUBJECT
+        value: mailto:admin@pulse.news
+      - key: ENABLE_BACKGROUND_SCHEDULER
+        value: "true"
+
+  # ----------------------------------------------------------------------------
+  # 2. PULSE FRONTEND STATIC SITE
+  # ----------------------------------------------------------------------------
+  - type: static
+    name: pulse-frontend
+    rootDir: client
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    routes:
+      # SPA fallback rewrite: ensures client-side routes (/vocabulary, /admin, /stories/:id) resolve to index.html
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    headers:
+      # HTTP Security Headers
+      - path: /*
+        name: X-Frame-Options
+        value: SAMEORIGIN
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
+      # Service Worker: Never cache sw.js so push updates & worker lifecycle activate immediately
+      - path: /sw.js
+        name: Cache-Control
+        value: no-cache, no-store, must-revalidate
+      # Immutable Assets: Long-term cache for Vite content-hashed assets
+      - path: /assets/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
+    envVars:
+      - key: VITE_API_BASE_URL
+        sync: false # Build-time URL pointing to pulse-backend (e.g. https://pulse-backend.onrender.com/api)
