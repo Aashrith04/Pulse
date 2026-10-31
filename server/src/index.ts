@@ -6,7 +6,7 @@ import { fileURLToPath } from 'url';
 import rateLimit from 'express-rate-limit';
 import apiRouter from './routes/api.js';
 import { taskScheduler } from './ingestion/scheduler.js';
-import { authenticateUser } from './db/supabaseClient.js';
+import { authenticateUser, printRuntimeDiagnostics } from './db/supabaseClient.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -91,6 +91,7 @@ app.get('/', (req, res) => {
 let server: any = null;
 if (process.env.NODE_ENV !== 'test') {
   server = app.listen(PORT, HOST, () => {
+    printRuntimeDiagnostics('Startup');
     console.log(`\n=================================================`);
     console.log(`  PULSE — THE WORLD, UNDERSTOOD.`);
     console.log(`  Server listening on http://${HOST}:${PORT}`);

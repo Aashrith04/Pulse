@@ -38,14 +38,18 @@ export function createRepository(forceMode?: StorageMode): INewsRepository {
   const targetMode = forceMode || getStorageMode();
 
   if (targetMode === 'cloud') {
-    const hasCreds = Boolean(
-      process.env.SUPABASE_URL &&
-      (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY)
-    );
+    const url = process.env.SUPABASE_URL?.trim();
+    const serviceKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY)?.trim();
+    const anonKey = (process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_PUBLISHABLE_KEY)?.trim();
+    const hasCreds = Boolean(url && (serviceKey || anonKey));
+
     if (!hasCreds) {
       const errorMsg = 
-        '[RepositoryFactory] FATAL: PULSE_STORAGE_MODE is set to "cloud", but Supabase credentials are missing or unconfigured. ' +
-        'Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in server/.env, or set PULSE_STORAGE_MODE=local.';
+        `[RepositoryFactory] FATAL: PULSE_STORAGE_MODE is set to "cloud", but Supabase credentials are missing or unconfigured. ` +
+        `Runtime Diagnostic: SUPABASE_URL=${url ? 'PRESENT' : 'MISSING'}, ` +
+        `SUPABASE_SERVICE_ROLE_KEY=${serviceKey ? 'PRESENT' : 'MISSING'}, ` +
+        `SUPABASE_ANON_KEY=${anonKey ? 'PRESENT' : 'MISSING'}. ` +
+        `Configure SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in Render Dashboard -> pulse-backend -> Environment or server/.env.`;
       console.error(errorMsg);
       throw new Error(errorMsg);
     }

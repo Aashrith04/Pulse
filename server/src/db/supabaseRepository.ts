@@ -36,9 +36,18 @@ export class SupabaseNewsRepository implements INewsRepository {
     this.adminClient = getSupabaseAdminClient();
 
     if (!this.adminClient && !this.anonClient) {
+      const hasUrl = Boolean(process.env.SUPABASE_URL?.trim());
+      const hasServiceKey = Boolean((process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY)?.trim());
+      const hasAnonKey = Boolean((process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_PUBLISHABLE_KEY)?.trim());
+      const storageMode = process.env.PULSE_STORAGE_MODE || 'UNSET';
+
       throw new Error(
-        '[SupabaseNewsRepository] Cannot initialize: Supabase credentials are not configured in server/.env. ' +
-        'Set PULSE_STORAGE_MODE=local or configure SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.'
+        `[SupabaseNewsRepository] Cannot initialize: Neither service-role nor anonymous Supabase client could be initialized. ` +
+        `Runtime Diagnostic: SUPABASE_URL=${hasUrl ? 'PRESENT' : 'MISSING'}, ` +
+        `SUPABASE_SERVICE_ROLE_KEY=${hasServiceKey ? 'PRESENT' : 'MISSING'}, ` +
+        `SUPABASE_ANON_KEY=${hasAnonKey ? 'PRESENT' : 'MISSING'}, ` +
+        `PULSE_STORAGE_MODE="${storageMode}". ` +
+        `Ensure these environment variables are configured in Render Dashboard -> pulse-backend -> Environment.`
       );
     }
   }

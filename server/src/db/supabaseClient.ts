@@ -12,45 +12,92 @@ dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 dotenv.config({ path: path.resolve(process.cwd(), 'server/.env') });
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
-const SUPABASE_URL = process.env.SUPABASE_URL?.trim();
-const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY?.trim();
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+export function cleanEnv(val: string | undefined): string | undefined {
+  if (!val) return undefined;
+  let trimmed = val.trim();
+  if (
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+  ) {
+    trimmed = trimmed.slice(1, -1).trim();
+  }
+  return trimmed || undefined;
+}
+
+export function printRuntimeDiagnostics(context: string): void {
+  const hasUrl = Boolean(cleanEnv(process.env.SUPABASE_URL));
+  const hasAnonKey = Boolean(cleanEnv(process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_PUBLISHABLE_KEY));
+  const hasServiceRoleKey = Boolean(cleanEnv(process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY));
+  const storageMode = process.env.PULSE_STORAGE_MODE || 'UNSET';
+  const nodeEnv = process.env.NODE_ENV || 'UNSET';
+
+  console.log(
+    `[Runtime Diagnostic - ${context}] ` +
+    `PULSE_STORAGE_MODE="${storageMode}", ` +
+    `NODE_ENV="${nodeEnv}", ` +
+    `SUPABASE_URL=${hasUrl ? 'PRESENT' : 'MISSING'}, ` +
+    `SUPABASE_ANON_KEY=${hasAnonKey ? 'PRESENT' : 'MISSING'}, ` +
+    `SUPABASE_SERVICE_ROLE_KEY=${hasServiceRoleKey ? 'PRESENT' : 'MISSING'}`
+  );
+}
 
 let anonClient: SupabaseClient | null = null;
 let adminClient: SupabaseClient | null = null;
 
-if (SUPABASE_URL && SUPABASE_ANON_KEY && !SUPABASE_ANON_KEY.includes('your-supabase')) {
-  try {
-    anonClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      auth: { persistSession: false },
-    });
-    console.log('[Supabase] Initialized anonymous client for public/user access.');
-  } catch (err) {
-    console.warn('[Supabase] Failed to initialize anonymous client:', err);
+export function initSupabaseClients(): { anonClient: SupabaseClient | null; adminClient: SupabaseClient | null } {
+  const url = cleanEnv(process.env.SUPABASE_URL)?.replace(/\/+$/, '');
+  const anonKey = cleanEnv(process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_PUBLISHABLE_KEY);
+  const serviceKey = cleanEnv(process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY);
+
+  printRuntimeDiagnostics('Client Initialization');
+
+  if (url && anonKey && !anonKey.includes('your-supabase')) {
+    try {
+      anonClient = createClient(url, anonKey, {
+        auth: { persistSession: false },
+      });
+      console.log('[Supabase] Initialized anonymous client for public/user access.');
+    } catch (err: any) {
+      console.error('[Supabase] Failed to initialize anonymous client:', err?.message || String(err));
+    }
   }
+
+  // Service-role client is strictly server-side and never exposed to the client or browser
+  if (url && serviceKey && !serviceKey.includes('your-supabase')) {
+    try {
+      adminClient = createClient(url, serviceKey, {
+        auth: { persistSession: false },
+      });
+      console.log('[Supabase] Initialized service-role client for background operations.');
+    } catch (err: any) {
+      console.error('[Supabase] Failed to initialize service-role client:', err?.message || String(err));
+    }
+  }
+
+  return { anonClient, adminClient };
 }
 
-// Service-role client is strictly server-side and never exposed to the client or browser
-if (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY && !SUPABASE_SERVICE_ROLE_KEY.includes('your-supabase')) {
-  try {
-    adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-      auth: { persistSession: false },
-    });
-    console.log('[Supabase] Initialized service-role client for background operations.');
-  } catch (err) {
-    console.warn('[Supabase] Failed to initialize service-role client:', err);
-  }
-}
+// Initial client initialization attempt
+initSupabaseClients();
 
 export function isSupabaseConfigured(): boolean {
-  return Boolean(anonClient !== null);
+  if (!anonClient && !adminClient) {
+    initSupabaseClients();
+  }
+  return Boolean(anonClient !== null || adminClient !== null);
 }
 
 export function getSupabaseClient(): SupabaseClient | null {
+  if (!anonClient) {
+    initSupabaseClients();
+  }
   return anonClient;
 }
 
 export function getSupabaseAdminClient(): SupabaseClient | null {
+  if (!adminClient) {
+    initSupabaseClients();
+  }
   return adminClient;
 }
 
@@ -61,11 +108,14 @@ export function getSupabaseAdminClient(): SupabaseClient | null {
  * Never mutates any shared client, strictly preventing cross-tenant authorization leakage.
  */
 export function createScopedSupabaseClient(token?: string): SupabaseClient {
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+  const url = cleanEnv(process.env.SUPABASE_URL)?.replace(/\/+$/, '');
+  const anonKey = cleanEnv(process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_PUBLISHABLE_KEY);
+
+  if (!url || !anonKey) {
     throw new Error('[Supabase] Cannot create scoped client: credentials missing');
   }
 
-  return createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  return createClient(url, anonKey, {
     auth: {
       persistSession: false,
       autoRefreshToken: false,
@@ -116,9 +166,10 @@ export async function authenticateUser(req: Request, res: Response, next: NextFu
   if (authHeader && authHeader.startsWith('Bearer ')) {
     const token = authHeader.split(' ')[1];
     
-    if (anonClient) {
+    const authClient = getSupabaseClient() || getSupabaseAdminClient();
+    if (authClient) {
       try {
-        const { data: { user }, error } = await anonClient.auth.getUser(token);
+        const { data: { user }, error } = await authClient.auth.getUser(token);
         if (error || !user) {
           return res.status(401).json({ error: 'Invalid or expired authentication session' });
         }
