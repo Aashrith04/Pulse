@@ -105,7 +105,8 @@ services:
   # ----------------------------------------------------------------------------
   # 2. PULSE FRONTEND STATIC SITE
   # ----------------------------------------------------------------------------
-  - type: static
+  - type: web
+    runtime: static
     name: pulse-frontend
     rootDir: client
     buildCommand: npm ci && npm run build
